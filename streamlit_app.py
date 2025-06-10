@@ -106,34 +106,34 @@ def connect_to_s3(aws_access_key, aws_secret_key):
         logger.error(error_message)
         return None, error_message
 
-# Функция для получения списка файлов в бакете
+# Функция для получения списка файлов в бакете (с поддержкой пагинации)
 def list_files_in_bucket(s3_client, bucket_name, prefix=''):
     try:
-        objects = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=prefix)
-        
-        if 'Contents' not in objects:
-            return [], f"Объекты не найдены в бакете {bucket_name} с префиксом {prefix}"
-        
-        # Фильтруем файлы, чтобы включать только те, что начинаются с 2025-04-09 или позже
+        paginator = s3_client.get_paginator('list_objects_v2')
+        page_iterator = paginator.paginate(Bucket=bucket_name, Prefix=prefix)
+
         file_list = []
         date_pattern = re.compile(r'(\d{4}-\d{2}-\d{2})')
-        
-        for obj in objects['Contents']:
-            key = obj['Key']
-            if key.endswith('.json'):  # Используем расширение .json как на скриншоте
-                # Извлекаем дату из имени файла
-                match = date_pattern.search(key)
-                if match:
-                    file_date = match.group(1)
-                    # Проверяем, что дата не раньше 9 апреля 2025
-                    if file_date >= "2025-04-09":
-                        file_list.append(key)
-        
+
+        for page in page_iterator:
+            if 'Contents' not in page:
+                continue
+
+            for obj in page['Contents']:
+                key = obj['Key']
+                if key.endswith('.json'):  # Используем расширение .json
+                    match = date_pattern.search(key)
+                    if match:
+                        file_date = match.group(1)
+                        if file_date >= "2025-04-09":
+                            file_list.append(key)
+
         return file_list, None
     except Exception as e:
         error_message = f"Ошибка при получении списка файлов: {str(e)}"
         logger.error(error_message)
         return [], error_message
+
 
 # Функция для загрузки файла из S3
 @st.cache_data
